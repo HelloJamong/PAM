@@ -16,17 +16,38 @@ function ProtectedRoute({ authenticated, children }) {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(null)
+  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => setAuthenticated(r.ok))
-      .catch(() => setAuthenticated(false))
+      .then(async r => {
+        if (!r.ok) {
+          setAuthenticated(false)
+          setPasswordChangeRequired(false)
+          return
+        }
+        const data = await r.json()
+        setAuthenticated(true)
+        setPasswordChangeRequired(Boolean(data.passwordChangeRequired))
+      })
+      .catch(() => {
+        setAuthenticated(false)
+        setPasswordChangeRequired(false)
+      })
   }, [])
 
   useEffect(() => {
-    const handler = () => setAuthenticated(false)
-    window.addEventListener('pam:unauthorized', handler)
-    return () => window.removeEventListener('pam:unauthorized', handler)
+    const unauthorizedHandler = () => {
+      setAuthenticated(false)
+      setPasswordChangeRequired(false)
+    }
+    const passwordChangeHandler = () => setPasswordChangeRequired(true)
+    window.addEventListener('pam:unauthorized', unauthorizedHandler)
+    window.addEventListener('pam:password-change-required', passwordChangeHandler)
+    return () => {
+      window.removeEventListener('pam:unauthorized', unauthorizedHandler)
+      window.removeEventListener('pam:password-change-required', passwordChangeHandler)
+    }
   }, [])
 
   if (authenticated === null) {
@@ -41,14 +62,24 @@ export default function App() {
           element={
             authenticated
               ? <Navigate to="/" replace />
-              : <Login onLogin={() => setAuthenticated(true)} />
+              : <Login onLogin={(data) => {
+                  setAuthenticated(true)
+                  setPasswordChangeRequired(Boolean(data?.passwordChangeRequired))
+                }} />
           }
         />
         <Route
           path="/*"
           element={
             <ProtectedRoute authenticated={authenticated}>
-              <Layout onLogout={() => setAuthenticated(false)}>
+              <Layout
+                passwordChangeRequired={passwordChangeRequired}
+                onPasswordChanged={() => setPasswordChangeRequired(false)}
+                onLogout={() => {
+                  setAuthenticated(false)
+                  setPasswordChangeRequired(false)
+                }}
+              >
                 <Routes>
                   <Route path="/"        element={<Dashboard />} />
                   <Route path="/assets"  element={<Assets />} />

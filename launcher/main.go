@@ -30,7 +30,7 @@ func main() {
 }
 
 func onReady() {
-	systray.SetIcon(iconGreen)
+	systray.SetIcon(iconPAM)
 	systray.SetTooltip("PAM - 실행 중 (포트 3000)")
 
 	mStatus = systray.AddMenuItem("PAM - 실행 중", "")
@@ -118,7 +118,7 @@ func killNode() {
 func restartNode() {
 	killNode()
 	mRestart.Hide()
-	systray.SetIcon(iconGreen)
+	systray.SetIcon(iconPAM)
 	systray.SetTooltip("PAM - 실행 중 (포트 3000)")
 	mStatus.SetTitle("PAM - 실행 중")
 	go startNode()

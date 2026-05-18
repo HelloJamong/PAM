@@ -26,6 +26,9 @@ async function request(method, path, body) {
 
   const data = await res.json()
   if (!res.ok) {
+    if (res.status === 403 && data.code === 'PASSWORD_CHANGE_REQUIRED') {
+      window.dispatchEvent(new Event('pam:password-change-required'))
+    }
     throw new Error(data.message || '요청 처리 중 오류가 발생했습니다.')
   }
   return data

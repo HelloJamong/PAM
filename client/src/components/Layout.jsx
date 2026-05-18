@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import PasswordChangeModal from './PasswordChangeModal.jsx'
 
 const NAV_ITEMS = [
   { to: '/',         label: '대시보드', end: true },
@@ -10,7 +11,7 @@ const NAV_ITEMS = [
   { to: '/history',  label: '이력 조회' },
 ]
 
-export default function Layout({ children, onLogout }) {
+export default function Layout({ children, onLogout, passwordChangeRequired, onPasswordChanged }) {
   const navigate = useNavigate()
 
   const handleLogout = async () => {
@@ -47,8 +48,13 @@ export default function Layout({ children, onLogout }) {
         </div>
       </nav>
       <main className="main-content">
-        {children}
+        {passwordChangeRequired ? (
+          <div className="password-required-placeholder">
+            비밀번호 변경 후 시스템을 이용할 수 있습니다.
+          </div>
+        ) : children}
       </main>
+      {passwordChangeRequired && <PasswordChangeModal onChanged={onPasswordChanged} />}
     </div>
   )
 }

@@ -57,11 +57,25 @@ db.exec(`
   );
 `)
 
-// 초기 관리자 비밀번호 설정 (없을 때만 삽입)
-const existing = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password')
-if (!existing) {
-  const hash = crypto.createHash('sha256').update('admin1234').digest('hex')
-  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('admin_password', hash)
+// 초기 관리자 비밀번호 설정 및 기존 기본값 마이그레이션
+const INITIAL_ADMIN_PASSWORD = 'password1!'
+const LEGACY_ADMIN_PASSWORD = 'admin1234'
+const initialHash = crypto.createHash('sha256').update(INITIAL_ADMIN_PASSWORD).digest('hex')
+const legacyHash = crypto.createHash('sha256').update(LEGACY_ADMIN_PASSWORD).digest('hex')
+const passwordSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password')
+const mustChangeSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('admin_password_must_change')
+
+if (!passwordSetting) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('admin_password', initialHash)
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('admin_password_must_change', 'true')
+} else if (passwordSetting.value === legacyHash) {
+  db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(initialHash, 'admin_password')
+  db.prepare(`
+    INSERT INTO settings (key, value) VALUES ('admin_password_must_change', 'true')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run()
+} else if (!mustChangeSetting) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('admin_password_must_change', 'false')
 }
 
 module.exports = db

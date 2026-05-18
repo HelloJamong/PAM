@@ -1,9 +1,9 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const { requireAuth } = require('../auth')
+const { requireAuth, requirePasswordReady } = require('../auth')
 
-router.use(requireAuth)
+router.use(requireAuth, requirePasswordReady)
 
 // GET /api/assets?status=&search=
 router.get('/', (req, res, next) => {

@@ -18,7 +18,7 @@ export default function Login({ onLogin }) {
       })
       const data = await res.json()
       if (res.ok) {
-        onLogin()
+        onLogin(data)
       } else {
         setError(data.message || '로그인에 실패했습니다.')
       }

@@ -209,7 +209,8 @@ CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
--- 초기값: key='admin_password', value=SHA256('admin1234')
+-- 초기값: key='admin_password', value=SHA256('password1!')
+-- 최초 로그인 강제 변경: key='admin_password_must_change', value='true'
 ```
 
 ---
@@ -219,8 +220,9 @@ CREATE TABLE settings (
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | POST | /api/auth/login | 비밀번호 확인, 세션 발급 |
+| POST | /api/auth/change-password | 최초 로그인/관리자 비밀번호 변경 |
 | POST | /api/auth/logout | 세션 삭제 |
-| GET | /api/auth/me | 세션 유효 확인 |
+| GET | /api/auth/me | 세션 유효 확인 및 비밀번호 변경 필요 여부 |
 | GET | /api/assets | 자산 목록 (쿼리: status, search) |
 | POST | /api/assets | 자산 등록 |
 | PUT | /api/assets/:id | 자산 수정 |
@@ -238,10 +240,12 @@ CREATE TABLE settings (
 ## Authentication
 
 - 단일 관리자 비밀번호 방식 (다중 계정 없음)
-- 초기 비밀번호: `admin1234` (DB settings 테이블에 SHA-256 해시로 저장)
+- 초기 비밀번호: `password1!` (DB settings 테이블에 SHA-256 해시로 저장)
+- 기존 `admin1234` 기본 해시는 시작 시 `password1!`로 마이그레이션하고 최초 변경 필요 상태로 전환
+- 최초 로그인 시 비밀번호 변경 팝업을 강제 표시하며, 변경 완료 전 주요 API 접근 차단
+- 새 비밀번호 정책: 최소 8자리, 대문자 1개 이상, 숫자 1개 이상, 특수문자 1개 이상
 - 세션 유효 기간: 8시간 (서버 재시작 시 초기화)
 - 로그인 실패 시 오류 메시지 표시, 잠금 없음
-- 비밀번호 변경: 1차 스코프 외 (직접 DB 수정)
 - 프론트엔드: 세션 만료 시 Login 화면으로 리다이렉트
 
 ---
@@ -251,6 +255,8 @@ CREATE TABLE settings (
 ### Login
 - 비밀번호 입력 폼
 - 오류 메시지 (잘못된 비밀번호)
+- 최초 로그인 시 비밀번호 변경 모달 표시
+- 비밀번호 규칙 안내: 최소 8자리, 대문자, 특수문자, 숫자 포함
 
 ### Dashboard
 - 통계 카드: 전체 자산 수, 보관중, 반출중
@@ -368,7 +374,7 @@ func startServer(exeDir string) (*exec.Cmd, error) {
 
 **Ask first:**
 - DB 스키마 변경 (컬럼 추가/삭제)
-- 비밀번호 정책 변경 (복잡도, 잠금)
+- 계정 잠금 및 비밀번호 주기적 만료 정책
 - 포트 번호 변경
 - 트레이 메뉴 항목 추가
 

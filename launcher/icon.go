@@ -1,6 +1,12 @@
 package main
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	_ "embed"
+)
+
+//go:embed assets/pam-logo.ico
+var iconPAM []byte
 
 func buildICO(r, g, b uint8) []byte {
 	const w, h = 16, 16
@@ -39,5 +45,4 @@ func buildICO(r, g, b uint8) []byte {
 	return result
 }
 
-var iconGreen = buildICO(0, 128, 0)
 var iconRed = buildICO(220, 38, 38)

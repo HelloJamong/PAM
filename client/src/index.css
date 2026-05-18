@@ -336,3 +336,36 @@ tr:hover td { background: #fafafa; }
   padding: 48px 24px;
   color: var(--text-muted);
 }
+
+.modal-description {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: -8px 0 14px;
+}
+
+.password-policy {
+  background: var(--primary-light);
+  border: 1px solid #ddd6fe;
+  border-radius: 6px;
+  color: var(--primary-hover);
+  font-size: 13px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.password-required-overlay {
+  cursor: default;
+}
+
+.password-required-placeholder {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: center;
+  min-height: 180px;
+  padding: 24px;
+}
