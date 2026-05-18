@@ -39,28 +39,6 @@ node server/index.js
 # → http://127.0.0.1:3000
 ```
 
-## Go 런처 빌드 (Windows EXE)
-
-```bash
-cd launcher
-go mod tidy
-
-# Windows 타깃 (Linux/Mac에서 크로스 컴파일)
-GOOS=windows GOARCH=amd64 go build -ldflags="-H windowsgui" -o ../PAM.exe .
-```
-
-## 릴리즈 (GitHub Actions)
-
-태그를 푸시하면 자동으로 빌드 및 GitHub Release가 생성됩니다.
-
-```bash
-git tag v26.1.0
-git push origin v26.1.0
-```
-
-릴리즈 아티팩트: `PAM-v26.1.0.zip` (PAM.exe + runtime/node.exe + server/ 포함)  
-릴리즈 노트: `CHANGELOG.md`의 해당 버전 항목에서 자동 추출
-
 ## 배포 폴더 구성
 
 ```
@@ -81,6 +59,6 @@ PortableAssetManager/
 - 서버 시작 시 `backup/pam_YYYYMMDD_HHmmss.db` 자동 생성
 - 복구: `backup/` 에서 원하는 파일을 `data/pam.db` 로 복사 후 재시작
 
-## 버전 형식
+## 라이선스
 
-`연도.메이저.마이너` — 예: `26.1.0` = 2026년 메이저 1 마이너 0
+이 프로젝트는 [MIT 라이선스](LICENSE)에 따라 배포됩니다.
