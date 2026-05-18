@@ -13,7 +13,7 @@ const isDev = process.env.NODE_ENV === 'development'
 const PORT = isDev ? 3001 : 3000
 const HOST = '127.0.0.1'
 
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 
 // 개발 환경 CORS (Vite 개발 서버 허용)
 if (isDev) {

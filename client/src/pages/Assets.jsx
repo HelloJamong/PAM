@@ -1,7 +1,21 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 
 const EMPTY_FORM = { asset_no: '', model_name: '', serial_no: '', status: '보관중', note: '' }
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10).replace(/-/g, '')
+}
+
+async function downloadCsv(response, filename) {
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 export default function Assets() {
   const [assets, setAssets] = useState([])
@@ -11,6 +25,8 @@ export default function Assets() {
   const [editId, setEditId] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef(null)
 
   const load = () => {
     const params = new URLSearchParams()
@@ -59,6 +75,58 @@ export default function Assets() {
   }
 
   const handleCancel = () => { setEditId(null); setForm(EMPTY_FORM); setError(''); setMessage('') }
+
+  const handleExport = async () => {
+    const params = new URLSearchParams()
+    if (search) params.set('search', search)
+    if (statusFilter) params.set('status', statusFilter)
+    setError(''); setMessage('')
+    try {
+      const res = await api.get(`/assets/export.csv?${params}`)
+      await downloadCsv(res, `assets_${todayKey()}.csv`)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleTemplateDownload = async () => {
+    setError(''); setMessage('')
+    try {
+      const res = await api.get('/assets/template.csv')
+      await downloadCsv(res, 'assets_import_template.csv')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFile = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setError(''); setMessage('')
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setError('CSV 확장자 파일만 가져올 수 있습니다.')
+      return
+    }
+
+    setImporting(true)
+    try {
+      const csv = await file.text()
+      const res = await api.post('/assets/import', { csv })
+      const { total, created, updated } = res.data
+      setMessage(`CSV 가져오기 완료: 총 ${total}건, 신규 ${created}건, 업데이트 ${updated}건`)
+      load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   return (
     <div>
@@ -119,6 +187,19 @@ export default function Assets() {
             <option value="반출중">반출중</option>
             <option value="폐기">폐기</option>
           </select>
+          <div className="toolbar-spacer" />
+          <button className="btn btn-secondary" onClick={handleTemplateDownload}>입력 양식 다운로드</button>
+          <button className="btn btn-secondary" onClick={handleExport}>CSV 내보내기</button>
+          <button className="btn btn-primary" onClick={handleImportClick} disabled={importing}>
+            {importing ? '가져오는 중...' : 'CSV 가져오기'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
         </div>
         <div className="table-wrap">
           {assets.length === 0 ? (
