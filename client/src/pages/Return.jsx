@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -9,17 +9,29 @@ export default function Return() {
   const [form, setForm] = useState({ return_date: today(), return_confirmed_by: '', note: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const triggerRef = useRef(null)
 
   const load = () => {
-    api.get('/loans?status=반출중').then(res => setLoans(res.data)).catch(() => {})
+    api.get('/loans?status=반출중')
+      .then(res => {
+        setLoans(res.data)
+        setError('')
+      })
+      .catch(err => setError(err.message))
   }
 
   useEffect(() => { load() }, [])
 
-  const openModal = loan => {
+  const openModal = (loan, trigger) => {
+    triggerRef.current = trigger
     setModal(loan)
     setForm({ return_date: today(), return_confirmed_by: '', note: '' })
     setError('')
+  }
+
+  const closeModal = () => {
+    setModal(null)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
   const handleChange = e => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -29,7 +41,7 @@ export default function Return() {
     setLoading(true); setError('')
     try {
       await api.put(`/loans/${modal.id}/return`, form)
-      setModal(null)
+      closeModal()
       load()
     } catch (err) {
       setError(err.message)
@@ -45,6 +57,7 @@ export default function Return() {
       </div>
 
       <div className="card">
+        {!modal && error && <div className="error-message" role="alert">{error}</div>}
         <div className="table-wrap">
           {loans.length === 0 ? (
             <div className="empty-state">반출중인 자산이 없습니다.</div>
@@ -71,7 +84,7 @@ export default function Return() {
                     <td>{l.checkout_date}</td>
                     <td>{l.expected_return_date || '-'}</td>
                     <td>
-                      <button className="btn btn-primary btn-sm" onClick={() => openModal(l)}>
+                      <button className="btn btn-primary btn-sm" onClick={e => openModal(l, e.currentTarget)}>
                         반납 처리
                       </button>
                     </td>
@@ -84,25 +97,29 @@ export default function Return() {
       </div>
 
       {modal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
-          <div className="modal">
-            <div className="modal-title">반납 처리 — {modal.asset_no}</div>
-            {error && <div className="error-message">{error}</div>}
+        <div
+          className="modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) closeModal() }}
+          onKeyDown={e => { if (e.key === 'Escape') closeModal() }}
+        >
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="return-modal-title">
+            <div className="modal-title" id="return-modal-title">반납 처리 — {modal.asset_no}</div>
+            {error && <div className="error-message" role="alert">{error}</div>}
             <form onSubmit={handleReturn}>
               <div className="form-group">
-                <label>반납일 *</label>
-                <input type="date" name="return_date" value={form.return_date} onChange={handleChange} required />
+                <label htmlFor="return_date">반납일 *</label>
+                <input id="return_date" type="date" name="return_date" value={form.return_date} onChange={handleChange} autoFocus required />
               </div>
               <div className="form-group">
-                <label>반납확인자</label>
-                <input name="return_confirmed_by" value={form.return_confirmed_by} onChange={handleChange} />
+                <label htmlFor="return_confirmed_by">반납확인자</label>
+                <input id="return_confirmed_by" name="return_confirmed_by" value={form.return_confirmed_by} onChange={handleChange} />
               </div>
               <div className="form-group">
-                <label>비고</label>
-                <input name="note" value={form.note} onChange={handleChange} />
+                <label htmlFor="return_note">비고</label>
+                <input id="return_note" name="note" value={form.note} onChange={handleChange} />
               </div>
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setModal(null)}>취소</button>
+                <button type="button" className="btn btn-secondary" onClick={closeModal}>취소</button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                   {loading ? '처리 중...' : '반납 확인'}
                 </button>

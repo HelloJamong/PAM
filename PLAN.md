@@ -63,8 +63,8 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 
 **Files:**
 - `package.json` (루트 — concurrently로 dev 동시 실행)
-- `client/package.json` (React 18, Vite 5)
-- `client/vite.config.js` (proxy 설정)
+- `client/package.json` (React 18, React Router 7, Vite 6)
+- `client/vite.config.mjs` (proxy 설정)
 - `client/index.html`
 - `client/src/main.jsx`
 - `client/src/App.jsx` (빈 껍데기)
@@ -83,7 +83,7 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 **Acceptance criteria:**
 - [ ] `data/pam.db`가 없을 때 서버 시작 시 자동 생성된다
 - [ ] 3개 테이블이 `IF NOT EXISTS`로 안전하게 생성된다
-- [ ] `settings` 테이블에 `admin_password` = SHA-256(`admin1234`) 초기값이 삽입된다
+- [ ] `settings` 테이블에 `admin_password` = scrypt(`password1!`) 초기값이 삽입된다
 - [ ] `data/` 폴더가 없으면 자동 생성된다
 
 **Verification:**
@@ -104,13 +104,13 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 **Description:** 127.0.0.1:3001(개발)/3000(운영) 바인딩, 세션 미들웨어, CORS(개발), 에러 핸들러, 정적 파일 서빙을 설정한다.
 
 **Acceptance criteria:**
-- [ ] `GET /api/health` → `{ status: "ok" }` 반환
+- [ ] `GET /api/health` → `{ status: "ok", app: "PAM" }` 계약 반환
 - [ ] `127.0.0.1`로만 바인딩 (0.0.0.0 아님)
 - [ ] `NODE_ENV=production`일 때 `server/public/` 정적 파일 서빙
 - [ ] 처리되지 않은 에러는 `{ success: false, message }` JSON으로 응답
 
 **Verification:**
-- [ ] `curl http://127.0.0.1:3001/api/health` → `{"status":"ok"}`
+- [ ] `curl http://127.0.0.1:3001/api/health` → `status="ok"`, `app="PAM"` 확인
 - [ ] `curl http://0.0.0.0:3001/api/health` → 연결 거부
 
 **Dependencies:** Task 2
@@ -140,7 +140,7 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 - [ ] `POST /api/auth/logout` — 세션 삭제
 - [ ] `GET /api/auth/me` — 세션 유효 시 200, 없으면 401
 - [ ] `requireAuth` 미들웨어: 세션 없으면 401 반환
-- [ ] 비밀번호 비교는 SHA-256 해시 후 DB 값과 비교
+- [ ] 비밀번호는 scrypt로 검증하고 기존 SHA-256 값은 로그인 시 마이그레이션
 
 **Verification:**
 - [ ] `curl -X POST .../api/auth/login -d '{"password":"admin1234"}'` → 200
@@ -150,7 +150,7 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 **Dependencies:** Task 3
 
 **Files:**
-- `server/auth.js` (SHA-256 함수, requireAuth 미들웨어)
+- `server/auth.js` (scrypt 해시/검증, 로그인 제한, requireAuth 미들웨어)
 - `server/routes/auth.js`
 - `server/index.js` (라우트 등록)
 
@@ -198,7 +198,7 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 **Description:** 자산 CRUD API를 구현한다. 반출중 자산 삭제 시도는 거부한다.
 
 **Acceptance criteria:**
-- [ ] `GET /api/assets` — 전체 목록, `status`/`search` 쿼리 필터 동작
+- [ ] `GET /api/assets` — `status`/`search` 필터와 `page`/`limit` 페이지네이션 동작
 - [ ] `POST /api/assets` — 자산 등록, `asset_no` 중복 시 409
 - [ ] `PUT /api/assets/:id` — 자산 수정
 - [ ] `DELETE /api/assets/:id` — 삭제, 반출중 상태면 400 반환
@@ -257,7 +257,7 @@ Go 트레이 런처 + Node.js/Express 백엔드 + React/Vite 프론트엔드로 
 **Description:** 반출 등록, 반납 처리, 이력 조회 API를 구현한다. 반출/반납은 SQLite 트랜잭션으로 처리한다.
 
 **Acceptance criteria:**
-- [ ] `GET /api/loans` — 이력 목록, `status`/`search` 쿼리 필터
+- [ ] `GET /api/loans` — `status`/`search` 필터와 `page`/`limit` 페이지네이션
 - [ ] `POST /api/loans/checkout` — loan_records 삽입 + asset.status → '반출중' (트랜잭션)
 - [ ] `PUT /api/loans/:id/return` — loan_records 업데이트 + asset.status → '보관중' (트랜잭션)
 - [ ] 보관중 아닌 자산으로 반출 시도 시 400

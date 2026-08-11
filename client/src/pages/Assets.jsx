@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
+import Pagination from '../components/Pagination.jsx'
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
 
 const EMPTY_FORM = { asset_no: '', model_name: '', serial_no: '', status: '보관중', note: '' }
 
@@ -26,16 +28,31 @@ export default function Assets() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [importing, setImporting] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState(null)
   const fileInputRef = useRef(null)
+  const debouncedSearch = useDebouncedValue(search)
 
   const load = () => {
     const params = new URLSearchParams()
-    if (search) params.set('search', search)
+    if (debouncedSearch) params.set('search', debouncedSearch)
     if (statusFilter) params.set('status', statusFilter)
-    api.get(`/assets?${params}`).then(res => setAssets(res.data)).catch(() => {})
+    params.set('page', page)
+    params.set('limit', '25')
+    api.get(`/assets?${params}`)
+      .then(res => {
+        if (res.pagination.page > res.pagination.totalPages) {
+          setPage(res.pagination.totalPages)
+          return
+        }
+        setAssets(res.data)
+        setPagination(res.pagination)
+        setError('')
+      })
+      .catch(err => setError(err.message))
   }
 
-  useEffect(() => { load() }, [search, statusFilter])
+  useEffect(() => { load() }, [debouncedSearch, statusFilter, page])
 
   const handleChange = e => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
@@ -136,36 +153,44 @@ export default function Assets() {
 
       <div className="card">
         <div className="card-title">{editId ? '자산 수정' : '자산 등록'}</div>
-        {error && <div className="error-message">{error}</div>}
-        {message && <div className="success-message">{message}</div>}
+        {error && <div className="error-message" role="alert">{error}</div>}
+        {message && <div className="success-message" role="status">{message}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <div className="form-group">
-              <label>자산번호 *</label>
-              <input name="asset_no" value={form.asset_no} onChange={handleChange} required />
+              <label htmlFor="asset_no">자산번호 *</label>
+              <input id="asset_no" name="asset_no" value={form.asset_no} onChange={handleChange} required />
             </div>
             <div className="form-group">
-              <label>모델명 *</label>
-              <input name="model_name" value={form.model_name} onChange={handleChange} required />
+              <label htmlFor="model_name">모델명 *</label>
+              <input id="model_name" name="model_name" value={form.model_name} onChange={handleChange} required />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>시리얼번호</label>
-              <input name="serial_no" value={form.serial_no} onChange={handleChange} />
+              <label htmlFor="serial_no">시리얼번호</label>
+              <input id="serial_no" name="serial_no" value={form.serial_no} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>상태</label>
-              <select name="status" value={form.status} onChange={handleChange}>
+              <label htmlFor="asset_status">상태</label>
+              <select
+                id="asset_status"
+                name="status"
+                value={form.status}
+                onChange={handleChange}
+                disabled={form.status === '반출중'}
+              >
                 <option value="보관중">보관중</option>
-                <option value="반출중">반출중</option>
                 <option value="폐기">폐기</option>
+                {form.status === '반출중' && (
+                  <option value="반출중">반출중 (반납 처리에서 변경)</option>
+                )}
               </select>
             </div>
           </div>
           <div className="form-group">
-            <label>비고</label>
-            <input name="note" value={form.note} onChange={handleChange} />
+            <label htmlFor="asset_note">비고</label>
+            <input id="asset_note" name="note" value={form.note} onChange={handleChange} />
           </div>
           <div className="form-actions">
             {editId && <button type="button" className="btn btn-secondary" onClick={handleCancel}>취소</button>}
@@ -177,11 +202,16 @@ export default function Assets() {
       <div className="card">
         <div className="toolbar">
           <input
+            aria-label="자산 검색"
             placeholder="자산번호 / 모델명 / 시리얼번호 검색"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <select
+            aria-label="자산 상태 필터"
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
+          >
             <option value="">전체 상태</option>
             <option value="보관중">보관중</option>
             <option value="반출중">반출중</option>
@@ -238,6 +268,7 @@ export default function Assets() {
             </table>
           )}
         </div>
+        <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
     </div>
   )

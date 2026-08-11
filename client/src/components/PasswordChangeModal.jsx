@@ -51,7 +51,7 @@ export default function PasswordChangeModal({ onChanged }) {
           초기 비밀번호로 로그인했습니다. 시스템 이용 전 관리자 비밀번호를 변경해주세요.
         </p>
         <div className="password-policy">비밀번호 규칙: {PASSWORD_POLICY_TEXT}</div>
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message" role="alert">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="currentPassword">현재 비밀번호</label>

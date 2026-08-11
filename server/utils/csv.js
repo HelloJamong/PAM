@@ -1,6 +1,7 @@
 function escapeField(value) {
   if (value == null) return ''
-  const str = String(value)
+  const raw = String(value)
+  const str = /^[\t ]*[=+\-@]/.test(raw) ? `'${raw}` : raw
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`
   }

@@ -1,4 +1,5 @@
 const db = require('./db')
+const { runBackup } = require('./utils/backup')
 
 const assets = [
   { asset_no: 'A-0001', model_name: 'ThinkPad X1 Carbon', serial_no: 'SN-TP-2024-001', status: '보관중', note: '7세대' },
@@ -62,4 +63,9 @@ for (const l of loans) {
   }
 }
 
-console.log('[seed] 완료')
+runBackup(db)
+  .then(() => console.log('[seed] 완료'))
+  .catch(err => {
+    console.error('[seed] 백업 실패:', err.message)
+    process.exitCode = 1
+  })

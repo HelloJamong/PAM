@@ -1,15 +1,17 @@
 package main
 
 import (
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
 
+	"github.com/HelloJamong/pam-launcher/health"
 	"github.com/getlantern/systray"
 )
+
+const serverURL = "http://127.0.0.1:3000"
 
 var (
 	childCmd *exec.Cmd
@@ -42,9 +44,9 @@ func onReady() {
 	systray.AddSeparator()
 	mQuit = systray.AddMenuItem("종료", "PAM 종료")
 
-	if isPortInUse() {
+	if isPAMServerRunning() {
 		openBrowser()
-		go handleMenuClicks()
+		systray.Quit()
 		return
 	}
 
@@ -96,16 +98,7 @@ func startNode() {
 }
 
 func waitForServer(timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get("http://127.0.0.1:3000/api/health")
-		if err == nil {
-			resp.Body.Close()
-			return true
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return false
+	return health.Wait(serverURL, timeout)
 }
 
 func killNode() {
@@ -131,25 +124,19 @@ func setError() {
 	mRestart.Show()
 }
 
-func isPortInUse() bool {
-	resp, err := http.Get("http://127.0.0.1:3000/api/health")
-	if err != nil {
-		return false
-	}
-	resp.Body.Close()
-	return true
+func isPAMServerRunning() bool {
+	return health.Check(serverURL)
 }
 
 func openBrowser() {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", "http://127.0.0.1:3000")
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", serverURL)
 	case "darwin":
-		cmd = exec.Command("open", "http://127.0.0.1:3000")
+		cmd = exec.Command("open", serverURL)
 	default:
-		cmd = exec.Command("xdg-open", "http://127.0.0.1:3000")
+		cmd = exec.Command("xdg-open", serverURL)
 	}
 	_ = cmd.Start()
 }
-

@@ -6,4 +6,3 @@ data/pam.db
 backup/
 *.exe
 launcher/PAM.exe
-launcher/go.sum

@@ -50,7 +50,7 @@ export default function Login({ onLogin }) {
               required
             />
           </div>
-          {error && <div className="error-message">{error}</div>}
+          {error && <div className="error-message" role="alert">{error}</div>}
           <button
             type="submit"
             className="btn btn-primary btn-full"

@@ -17,7 +17,7 @@ export default function Dashboard() {
         <h1 className="page-title">대시보드</h1>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="error-message" role="alert">{error}</div>}
 
       {data && (
         <>

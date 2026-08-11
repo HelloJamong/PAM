@@ -31,6 +31,9 @@ async function request(method, path, body) {
     }
     throw new Error(data.message || '요청 처리 중 오류가 발생했습니다.')
   }
+  if (data.backup) {
+    window.dispatchEvent(new CustomEvent('pam:backup-status', { detail: data.backup }))
+  }
   return data
 }
 

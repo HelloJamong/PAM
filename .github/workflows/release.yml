@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]*.[0-9]*.[0-9]*'
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 jobs:
   release:
@@ -34,6 +34,26 @@ jobs:
       - name: Install client dependencies
         run: npm ci --prefix client
 
+      - name: Verify release version
+        shell: bash
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          CLIENT_VERSION="$(node -p "require('./client/package.json').version")"
+          test "$TAG_VERSION" = "$PACKAGE_VERSION"
+          test "$PACKAGE_VERSION" = "$CLIENT_VERSION"
+          grep -q "^## \[$PACKAGE_VERSION\]" CHANGELOG.md
+
+      - name: Run tests
+        run: npm test
+
+      - name: Audit production dependencies
+        shell: bash
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --prefix client --omit=dev --audit-level=high
+
       - name: Build frontend
         run: npm run build
 
@@ -44,12 +64,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache-dependency-path: launcher/go.sum
 
       - name: Build Go launcher
         shell: bash
         working-directory: launcher
         run: |
-          go mod tidy
+          go mod download
+          go test ./health
           go build -ldflags="-H windowsgui" -o ../PAM.exe .
 
       - name: Download portable Node.js runtime

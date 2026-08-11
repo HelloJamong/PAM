@@ -24,6 +24,9 @@ npm install --prefix client
 # 개발 서버 실행 (Vite :5173 + Express :3001 동시 실행)
 npm run dev
 
+# 자동 테스트
+npm test
+
 # 샘플 데이터 삽입 (선택)
 npm run seed
 ```
@@ -50,7 +53,9 @@ node server/index.js
   - 선택 컬럼: `시리얼번호`, `상태`, `비고`
   - 상태 값: `보관중`, `반출중`, `폐기`
   - 기존 자산번호가 있으면 해당 자산 정보를 업데이트합니다.
+  - `반출중` 상태로의 변경은 CSV가 아니라 반출 등록 화면에서 처리합니다.
 - **CSV 내보내기**: 현재 검색/상태 필터가 적용된 자산 목록을 `.csv`로 다운로드합니다.
+  - Excel 수식으로 해석될 수 있는 값은 안전한 텍스트로 내보냅니다.
 
 ## 배포 폴더 구성
 
@@ -64,13 +69,21 @@ PortableAssetManager/
 ├── node_modules/         # 서버 의존성 (express, better-sqlite3 등)
 ├── package.json
 ├── data/                 # pam.db 자동 생성
-└── backup/               # 서버 시작 시 자동 백업
+└── backup/               # 자동 스냅샷 백업 (최근 30개 보존)
 ```
 
 ## 백업 및 복구
 
-- 서버 시작 시 `backup/pam_YYYYMMDD_HHmmss.db` 자동 생성
+- 기존 DB로 서버를 시작하거나 데이터 변경이 완료되면 SQLite 온라인 백업을 자동 생성합니다.
+- WAL에 기록된 변경도 포함하며, 기본적으로 최근 백업 30개를 보존합니다.
+- `PAM_BACKUP_RETENTION` 환경 변수로 보존 개수를 조정할 수 있습니다.
+- 백업 실패 시 데이터 저장 결과와 별도로 화면에 운영 경고를 표시합니다.
 - 복구: `backup/` 에서 원하는 파일을 `data/pam.db` 로 복사 후 재시작
+
+## 버전
+
+- 현재 버전: `26.1.3`
+- 루트/클라이언트 패키지와 CHANGELOG 버전을 동일하게 유지합니다.
 
 ## 라이선스
 

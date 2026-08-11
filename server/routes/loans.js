@@ -2,6 +2,9 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { requireAuth, requirePasswordReady } = require('../auth')
+const { validateLoanDates } = require('../validation')
+const { backupAfterMutation } = require('../utils/backup')
+const { parsePagination, paginationMeta } = require('../pagination')
 
 router.use(requireAuth, requirePasswordReady)
 
@@ -9,33 +12,42 @@ router.use(requireAuth, requirePasswordReady)
 router.get('/', (req, res, next) => {
   try {
     const { status, search } = req.query
-    let sql = `
-      SELECT lr.*, a.asset_no, a.model_name, a.serial_no
+    let fromWhere = `
       FROM loan_records lr
       JOIN assets a ON lr.asset_id = a.id
       WHERE 1=1`
     const params = []
 
     if (status) {
-      sql += ' AND lr.status = ?'
+      fromWhere += ' AND lr.status = ?'
       params.push(status)
     }
     if (search) {
-      sql += ' AND (a.asset_no LIKE ? OR a.model_name LIKE ? OR lr.user_name LIKE ?)'
+      fromWhere += ' AND (a.asset_no LIKE ? OR a.model_name LIKE ? OR lr.user_name LIKE ?)'
       const like = `%${search}%`
       params.push(like, like, like)
     }
 
-    sql += ' ORDER BY lr.created_at DESC'
-    const loans = db.prepare(sql).all(...params)
-    res.json({ success: true, data: loans })
+    let sql = `SELECT lr.*, a.asset_no, a.model_name, a.serial_no ${fromWhere}`
+    const pagination = parsePagination(req.query)
+    sql += ' ORDER BY lr.created_at DESC, lr.id DESC'
+    if (pagination) sql += ' LIMIT ? OFFSET ?'
+    const loans = pagination
+      ? db.prepare(sql).all(...params, pagination.limit, pagination.offset)
+      : db.prepare(sql).all(...params)
+    const response = { success: true, data: loans }
+    if (pagination) {
+      const total = db.prepare(`SELECT COUNT(*) AS count ${fromWhere}`).get(...params).count
+      response.pagination = paginationMeta(total, pagination)
+    }
+    res.json(response)
   } catch (err) {
     next(err)
   }
 })
 
 // POST /api/loans/checkout
-router.post('/checkout', (req, res, next) => {
+router.post('/checkout', async (req, res, next) => {
   try {
     const {
       asset_id, user_name, company_name, phone,
@@ -44,6 +56,13 @@ router.post('/checkout', (req, res, next) => {
 
     if (!asset_id || !user_name || !checkout_date) {
       return res.status(400).json({ success: false, message: '자산, 반출자명, 반출일은 필수입니다.' })
+    }
+    const dateError = validateLoanDates({
+      checkoutDate: checkout_date,
+      expectedReturnDate: expected_return_date,
+    })
+    if (dateError) {
+      return res.status(400).json({ success: false, message: dateError })
     }
 
     const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(asset_id)
@@ -67,14 +86,15 @@ router.post('/checkout', (req, res, next) => {
     })
 
     const record = checkout()
-    res.status(201).json({ success: true, data: record })
+    const backup = await backupAfterMutation(db, '반출 등록')
+    res.status(201).json({ success: true, data: record, backup })
   } catch (err) {
     next(err)
   }
 })
 
 // PUT /api/loans/:id/return
-router.put('/:id/return', (req, res, next) => {
+router.put('/:id/return', async (req, res, next) => {
   try {
     const { id } = req.params
     const { return_date, return_confirmed_by, note } = req.body
@@ -85,8 +105,13 @@ router.put('/:id/return', (req, res, next) => {
       return res.status(400).json({ success: false, message: '반출중인 이력만 반납 처리할 수 있습니다.' })
     }
 
+    const actualReturnDate = return_date || new Date().toISOString().slice(0, 10)
+    const dateError = validateLoanDates({ checkoutDate: loan.checkout_date, returnDate: actualReturnDate })
+    if (dateError) {
+      return res.status(400).json({ success: false, message: dateError })
+    }
+
     const returnOp = db.transaction(() => {
-      const actualReturnDate = return_date || new Date().toISOString().slice(0, 10)
       db.prepare(`
         UPDATE loan_records
         SET status='반납완료', return_date=?, return_confirmed_by=?, note=COALESCE(?,note),
@@ -98,7 +123,8 @@ router.put('/:id/return', (req, res, next) => {
     })
 
     const updated = returnOp()
-    res.json({ success: true, data: updated })
+    const backup = await backupAfterMutation(db, '반납 처리')
+    res.json({ success: true, data: updated, backup })
   } catch (err) {
     next(err)
   }

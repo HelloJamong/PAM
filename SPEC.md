@@ -22,7 +22,7 @@ Windows 폐쇄망 PC에서 설치 없이 실행 가능한 포터블 로컬 웹 �
 | 구분 | 선택 | 버전 |
 |------|------|------|
 | Launcher | Go (트레이 런처) | Go 1.22+, getlantern/systray |
-| Frontend | React + Vite | React 18, Vite 5 |
+| Frontend | React + Vite | React 18, React Router 7, Vite 6 |
 | Backend | Node.js + Express | Node 20 LTS, Express 4 |
 | Database | SQLite | better-sqlite3 |
 | Auth | 단순 비밀번호 (세션 기반) | express-session |
@@ -44,7 +44,7 @@ npm run build                  # Vite 빌드 → server/public/ 출력
 
 # Go 런처 빌드 (Windows 타깃)
 cd launcher
-go mod tidy
+go mod download
 GOOS=windows GOARCH=amd64 go build -ldflags="-H windowsgui" -o ../PAM.exe .
 
 # 유틸
@@ -223,11 +223,11 @@ CREATE TABLE settings (
 | POST | /api/auth/change-password | 최초 로그인/관리자 비밀번호 변경 |
 | POST | /api/auth/logout | 세션 삭제 |
 | GET | /api/auth/me | 세션 유효 확인 및 비밀번호 변경 필요 여부 |
-| GET | /api/assets | 자산 목록 (쿼리: status, search) |
+| GET | /api/assets | 자산 목록 (쿼리: status, search, page, limit) |
 | POST | /api/assets | 자산 등록 |
 | PUT | /api/assets/:id | 자산 수정 |
 | DELETE | /api/assets/:id | 자산 삭제 (반출중이면 거부) |
-| GET | /api/loans | 이력 목록 (쿼리: status, search) |
+| GET | /api/loans | 이력 목록 (쿼리: status, search, page, limit) |
 | POST | /api/loans/checkout | 반출 등록 (자산 상태 → 반출중) |
 | PUT | /api/loans/:id/return | 반납 처리 (자산 상태 → 보관중) |
 | GET | /api/dashboard | 통계 + 최근 이력 5건 |
@@ -240,12 +240,12 @@ CREATE TABLE settings (
 ## Authentication
 
 - 단일 관리자 비밀번호 방식 (다중 계정 없음)
-- 초기 비밀번호: `password1!` (DB settings 테이블에 SHA-256 해시로 저장)
+- 초기 비밀번호: `password1!` (DB settings 테이블에 salt가 포함된 scrypt 해시로 저장)
 - 기존 `admin1234` 기본 해시는 시작 시 `password1!`로 마이그레이션하고 최초 변경 필요 상태로 전환
 - 최초 로그인 시 비밀번호 변경 팝업을 강제 표시하며, 변경 완료 전 주요 API 접근 차단
 - 새 비밀번호 정책: 최소 8자리, 대문자 1개 이상, 숫자 1개 이상, 특수문자 1개 이상
 - 세션 유효 기간: 8시간 (서버 재시작 시 초기화)
-- 로그인 실패 시 오류 메시지 표시, 잠금 없음
+- 로그인 5회 연속 실패 시 30초 동안 추가 로그인 요청 제한
 - 프론트엔드: 세션 만료 시 Login 화면으로 리다이렉트
 
 ---
@@ -337,13 +337,14 @@ func startServer(exeDir string) (*exec.Cmd, error) {
 
 ## Testing Strategy
 
-단위 테스트는 1차 스코프 외. 수동 검증:
+Node 내장 테스트 러너로 상태 전이, 날짜 검증, API 플로우, WAL 백업 및 보존 정책을 자동 검증한다.
+수동 검증:
 
 1. **자산 CRUD:** 등록 → 목록 확인 → 수정 → 삭제
 2. **반출 플로우:** 보관중 자산 선택 → 반출 등록 → 상태 변경 확인
 3. **반납 플로우:** 반출중 자산 반납 처리 → 상태 복구 확인
 4. **CSV 내보내기:** Excel 열기 → 한글 깨짐 없음 확인
-5. **백업:** 서버 재시작 → backup/ 폴더에 새 파일 생성 확인
+5. **백업:** 데이터 변경 → backup/ 폴더에 복구 가능한 새 파일 생성 확인
 6. **인증:** 비밀번호 없이 API 호출 → 401 응답 확인
 7. **트레이 동작:** PAM.exe 실행 → 트레이 아이콘 확인 → 브라우저 닫아도 트레이 유지 → 종료 클릭 → 프로세스 완전 종료
 8. **중복 실행:** PAM.exe 두 번 실행 → 두 번째 실행 시 브라우저만 오픈, 서버 중복 실행 없음
@@ -356,7 +357,7 @@ func startServer(exeDir string) (*exec.Cmd, error) {
 - Express: `127.0.0.1:3000`으로만 listen (외부 네트워크 차단)
 - CORS: 개발 환경(`localhost:5173`)에서만 허용, 운영 빌드에서는 비활성화
 - 세션 시크릿: 랜덤 생성 (서버 시작 시마다 새로 생성, 재시작 시 세션 만료)
-- 비밀번호: SHA-256 해시 후 DB 저장
+- 비밀번호: salt가 포함된 scrypt 해시로 저장하며 기존 SHA-256 값은 로그인 시 자동 마이그레이션
 - SQL: prepared statement 사용 (better-sqlite3 기본)
 - 외부 API 호출 없음, 외부 CDN 없음
 - Go 런처: 자식 프로세스 PID 추적, 종료 시 반드시 kill
@@ -389,11 +390,14 @@ func startServer(exeDir string) (*exec.Cmd, error) {
 
 ## Auto Backup
 
-- 트리거: `server/index.js` 시작 시 1회
+- 트리거: 기존 DB로 서버 시작 시 및 데이터 변경 완료 시
 - 소스: `data/pam.db`
-- 대상: `backup/pam_YYYYMMDD_HHmmss.db`
+- 대상: `backup/pam_YYYYMMDD_HHmmss_SSS.db`
 - DB 파일이 없으면 백업 스킵 (첫 실행)
 - 백업 폴더 없으면 자동 생성
+- SQLite 온라인 백업 API를 사용하여 WAL 변경을 포함
+- 기본 보존 개수: 최근 30개 (`PAM_BACKUP_RETENTION`으로 조정)
+- 백업 실패는 API 응답과 `/api/health` 상태에 노출하고 화면에 경고 표시
 
 ---
 

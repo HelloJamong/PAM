@@ -3,6 +3,9 @@ const router = express.Router()
 const db = require('../db')
 const { requireAuth, requirePasswordReady } = require('../auth')
 const { buildAssetsCsv, buildAssetsTemplateCsv, parseAssetsCsv } = require('../utils/csv')
+const { validateAssetStatusTransition } = require('../validation')
+const { backupAfterMutation } = require('../utils/backup')
+const { parsePagination, paginationMeta } = require('../pagination')
 
 router.use(requireAuth, requirePasswordReady)
 
@@ -10,22 +13,31 @@ router.use(requireAuth, requirePasswordReady)
 router.get('/', (req, res, next) => {
   try {
     const { status, search } = req.query
-    let sql = 'SELECT * FROM assets WHERE 1=1'
+    let where = ' WHERE 1=1'
     const params = []
 
     if (status) {
-      sql += ' AND status = ?'
+      where += ' AND status = ?'
       params.push(status)
     }
     if (search) {
-      sql += ' AND (asset_no LIKE ? OR model_name LIKE ? OR serial_no LIKE ?)'
+      where += ' AND (asset_no LIKE ? OR model_name LIKE ? OR serial_no LIKE ?)'
       const like = `%${search}%`
       params.push(like, like, like)
     }
 
-    sql += ' ORDER BY created_at DESC'
-    const assets = db.prepare(sql).all(...params)
-    res.json({ success: true, data: assets })
+    const pagination = parsePagination(req.query)
+    let sql = `SELECT * FROM assets${where} ORDER BY created_at DESC, id DESC`
+    if (pagination) sql += ' LIMIT ? OFFSET ?'
+    const assets = pagination
+      ? db.prepare(sql).all(...params, pagination.limit, pagination.offset)
+      : db.prepare(sql).all(...params)
+    const response = { success: true, data: assets }
+    if (pagination) {
+      const total = db.prepare(`SELECT COUNT(*) AS count FROM assets${where}`).get(...params).count
+      response.pagination = paginationMeta(total, pagination)
+    }
+    res.json(response)
   } catch (err) {
     next(err)
   }
@@ -74,7 +86,7 @@ router.get('/template.csv', (req, res, next) => {
 })
 
 // POST /api/assets/import
-router.post('/import', (req, res, next) => {
+router.post('/import', async (req, res, next) => {
   try {
     const { csv } = req.body || {}
     if (!csv || typeof csv !== 'string') {
@@ -85,7 +97,7 @@ router.post('/import', (req, res, next) => {
     }
 
     const assets = parseAssetsCsv(csv)
-    const existingStmt = db.prepare('SELECT id FROM assets WHERE asset_no = ?')
+    const existingStmt = db.prepare('SELECT id, status FROM assets WHERE asset_no = ?')
     const insertStmt = db.prepare(
       'INSERT INTO assets (asset_no, model_name, serial_no, status, note) VALUES (?, ?, ?, ?, ?)'
     )
@@ -99,6 +111,12 @@ router.post('/import', (req, res, next) => {
       let updated = 0
       for (const asset of items) {
         const existing = existingStmt.get(asset.asset_no)
+        const transitionError = validateAssetStatusTransition(existing?.status, asset.status)
+        if (transitionError) {
+          const err = new Error(`${asset.asset_no}: ${transitionError}`)
+          err.status = 400
+          throw err
+        }
         if (existing) {
           updateStmt.run(asset.model_name, asset.serial_no, asset.status, asset.note, asset.asset_no)
           updated += 1
@@ -110,25 +128,31 @@ router.post('/import', (req, res, next) => {
       return { total: items.length, created, updated }
     })(assets)
 
-    res.json({ success: true, data: result })
+    const backup = await backupAfterMutation(db, '자산 CSV 가져오기')
+    res.json({ success: true, data: result, backup })
   } catch (err) {
     next(err)
   }
 })
 
 // POST /api/assets
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { asset_no, model_name, serial_no, status = '보관중', note } = req.body
     if (!asset_no || !model_name) {
       return res.status(400).json({ success: false, message: '자산번호와 모델명은 필수입니다.' })
+    }
+    const transitionError = validateAssetStatusTransition(null, status)
+    if (transitionError) {
+      return res.status(400).json({ success: false, message: transitionError })
     }
     try {
       const result = db.prepare(
         'INSERT INTO assets (asset_no, model_name, serial_no, status, note) VALUES (?, ?, ?, ?, ?)'
       ).run(asset_no, model_name, serial_no || null, status, note || null)
       const created = db.prepare('SELECT * FROM assets WHERE id = ?').get(result.lastInsertRowid)
-      res.status(201).json({ success: true, data: created })
+      const backup = await backupAfterMutation(db, '자산 등록')
+      res.status(201).json({ success: true, data: created, backup })
     } catch (err) {
       if (err.message.includes('UNIQUE')) {
         return res.status(409).json({ success: false, message: '이미 존재하는 자산번호입니다.' })
@@ -141,15 +165,19 @@ router.post('/', (req, res, next) => {
 })
 
 // PUT /api/assets/:id
-router.put('/:id', (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params
     const { asset_no, model_name, serial_no, status, note } = req.body
     if (!asset_no || !model_name) {
       return res.status(400).json({ success: false, message: '자산번호와 모델명은 필수입니다.' })
     }
-    const asset = db.prepare('SELECT id FROM assets WHERE id = ?').get(id)
+    const asset = db.prepare('SELECT id, status FROM assets WHERE id = ?').get(id)
     if (!asset) return res.status(404).json({ success: false, message: '자산을 찾을 수 없습니다.' })
+    const transitionError = validateAssetStatusTransition(asset.status, status)
+    if (transitionError) {
+      return res.status(400).json({ success: false, message: transitionError })
+    }
 
     try {
       db.prepare(
@@ -164,14 +192,15 @@ router.put('/:id', (req, res, next) => {
     }
 
     const updated = db.prepare('SELECT * FROM assets WHERE id = ?').get(id)
-    res.json({ success: true, data: updated })
+    const backup = await backupAfterMutation(db, '자산 수정')
+    res.json({ success: true, data: updated, backup })
   } catch (err) {
     next(err)
   }
 })
 
 // DELETE /api/assets/:id
-router.delete('/:id', (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params
     const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(id)
@@ -183,7 +212,8 @@ router.delete('/:id', (req, res, next) => {
       db.prepare('DELETE FROM loan_records WHERE asset_id = ?').run(id)
       db.prepare('DELETE FROM assets WHERE id = ?').run(id)
     })()
-    res.json({ success: true })
+    const backup = await backupAfterMutation(db, '자산 삭제')
+    res.json({ success: true, backup })
   } catch (err) {
     next(err)
   }

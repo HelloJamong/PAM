@@ -4,13 +4,13 @@ const path = require('path')
 const crypto = require('crypto')
 
 // DB 초기화 (테이블 자동 생성 + 초기 비밀번호 설정)
-require('./db')
-const { runBackup } = require('./utils/backup')
-runBackup()
+const db = require('./db')
+const { backupAfterMutation, getBackupStatus } = require('./utils/backup')
 
 const app = express()
 const isDev = process.env.NODE_ENV === 'development'
-const PORT = isDev ? 3001 : 3000
+const configuredPort = Number.parseInt(process.env.PAM_PORT, 10)
+const PORT = Number.isInteger(configuredPort) ? configuredPort : isDev ? 3001 : 3000
 const HOST = '127.0.0.1'
 
 app.use(express.json({ limit: '5mb' }))
@@ -47,7 +47,12 @@ app.use('/api/dashboard', require('./routes/dashboard'))
 app.use('/api/export',  require('./routes/export'))
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', mode: isDev ? 'development' : 'production' })
+  res.json({
+    status: 'ok',
+    app: 'PAM',
+    mode: isDev ? 'development' : 'production',
+    backup: getBackupStatus(),
+  })
 })
 
 // 운영 빌드: 정적 파일 서빙 (API 이외 모든 경로 → index.html)
@@ -68,6 +73,26 @@ app.use((err, req, res, next) => {
   })
 })
 
-app.listen(PORT, HOST, () => {
-  console.log(`PAM 서버 실행 중: http://${HOST}:${PORT}`)
-})
+async function startServer({ port = PORT, host = HOST } = {}) {
+  if (!db.isNewDatabase) {
+    await backupAfterMutation(db, '서버 시작')
+  }
+
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, host, () => {
+      const address = server.address()
+      console.log(`PAM 서버 실행 중: http://${host}:${address.port}`)
+      resolve(server)
+    })
+    server.once('error', reject)
+  })
+}
+
+if (require.main === module) {
+  startServer().catch(err => {
+    console.error('[서버 시작 오류]', err.message)
+    process.exitCode = 1
+  })
+}
+
+module.exports = { app, startServer }

@@ -12,7 +12,12 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false)
 
   const loadAssets = () => {
-    api.get('/assets?status=보관중').then(res => setAssets(res.data)).catch(() => {})
+    api.get('/assets?status=보관중')
+      .then(res => {
+        setAssets(res.data)
+        setError('')
+      })
+      .catch(err => setError(err.message))
   }
 
   useEffect(() => { loadAssets() }, [])
@@ -41,12 +46,12 @@ export default function Checkout() {
       </div>
 
       <div className="card">
-        {error && <div className="error-message">{error}</div>}
-        {message && <div className="success-message">{message}</div>}
+        {error && <div className="error-message" role="alert">{error}</div>}
+        {message && <div className="success-message" role="status">{message}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>자산 선택 *</label>
-            <select name="asset_id" value={form.asset_id} onChange={handleChange} required>
+            <label htmlFor="checkout_asset_id">자산 선택 *</label>
+            <select id="checkout_asset_id" name="asset_id" value={form.asset_id} onChange={handleChange} required>
               <option value="">-- 보관중 자산 선택 --</option>
               {assets.map(a => (
                 <option key={a.id} value={a.id}>{a.asset_no} / {a.model_name}</option>
@@ -55,37 +60,37 @@ export default function Checkout() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>반출자명 *</label>
-              <input name="user_name" value={form.user_name} onChange={handleChange} required />
+              <label htmlFor="checkout_user_name">반출자명 *</label>
+              <input id="checkout_user_name" name="user_name" value={form.user_name} onChange={handleChange} required />
             </div>
             <div className="form-group">
-              <label>소속업체</label>
-              <input name="company_name" value={form.company_name} onChange={handleChange} />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>연락처</label>
-              <input name="phone" value={form.phone} onChange={handleChange} />
-            </div>
-            <div className="form-group">
-              <label>반출확인자</label>
-              <input name="checkout_confirmed_by" value={form.checkout_confirmed_by} onChange={handleChange} />
+              <label htmlFor="checkout_company_name">소속업체</label>
+              <input id="checkout_company_name" name="company_name" value={form.company_name} onChange={handleChange} />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>반출일 *</label>
-              <input type="date" name="checkout_date" value={form.checkout_date} onChange={handleChange} required />
+              <label htmlFor="checkout_phone">연락처</label>
+              <input id="checkout_phone" name="phone" value={form.phone} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>반납예정일</label>
-              <input type="date" name="expected_return_date" value={form.expected_return_date} onChange={handleChange} />
+              <label htmlFor="checkout_confirmed_by">반출확인자</label>
+              <input id="checkout_confirmed_by" name="checkout_confirmed_by" value={form.checkout_confirmed_by} onChange={handleChange} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="checkout_date">반출일 *</label>
+              <input id="checkout_date" type="date" name="checkout_date" value={form.checkout_date} onChange={handleChange} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="expected_return_date">반납예정일</label>
+              <input id="expected_return_date" type="date" name="expected_return_date" value={form.expected_return_date} onChange={handleChange} />
             </div>
           </div>
           <div className="form-group">
-            <label>비고</label>
-            <input name="note" value={form.note} onChange={handleChange} />
+            <label htmlFor="checkout_note">비고</label>
+            <input id="checkout_note" name="note" value={form.note} onChange={handleChange} />
           </div>
           <div className="form-actions">
             <button type="submit" className="btn btn-primary" disabled={loading}>

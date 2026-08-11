@@ -1,25 +1,44 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
+import Pagination from '../components/Pagination.jsx'
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
 
 export default function History() {
   const [loans, setLoans] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState(null)
+  const debouncedSearch = useDebouncedValue(search)
 
   const load = () => {
     const params = new URLSearchParams()
-    if (search) params.set('search', search)
+    if (debouncedSearch) params.set('search', debouncedSearch)
     if (statusFilter) params.set('status', statusFilter)
-    api.get(`/loans?${params}`).then(res => setLoans(res.data)).catch(() => {})
+    params.set('page', page)
+    params.set('limit', '25')
+    api.get(`/loans?${params}`)
+      .then(res => {
+        if (res.pagination.page > res.pagination.totalPages) {
+          setPage(res.pagination.totalPages)
+          return
+        }
+        setLoans(res.data)
+        setPagination(res.pagination)
+        setError('')
+      })
+      .catch(err => setError(err.message))
   }
 
-  useEffect(() => { load() }, [search, statusFilter])
+  useEffect(() => { load() }, [debouncedSearch, statusFilter, page])
 
   const handleDownload = async () => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
     if (statusFilter) params.set('status', statusFilter)
     try {
+      setError('')
       const res = await api.get(`/export/loans.csv?${params}`)
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -29,7 +48,7 @@ export default function History() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      alert(err.message)
+      setError(err.message)
     }
   }
 
@@ -40,13 +59,19 @@ export default function History() {
       </div>
 
       <div className="card">
+        {error && <div className="error-message" role="alert">{error}</div>}
         <div className="toolbar">
           <input
+            aria-label="이력 검색"
             placeholder="자산번호 / 모델명 / 반출자 검색"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <select
+            aria-label="이력 상태 필터"
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
+          >
             <option value="">전체 상태</option>
             <option value="반출중">반출중</option>
             <option value="반납완료">반납완료</option>
@@ -97,6 +122,7 @@ export default function History() {
             </table>
           )}
         </div>
+        <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
     </div>
   )

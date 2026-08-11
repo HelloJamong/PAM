@@ -1,6 +1,6 @@
 {
   "name": "pam",
-  "version": "1.0.0",
+  "version": "26.1.3",
   "private": true,
   "scripts": {
     "dev": "concurrently -n \"server,client\" -c \"cyan,green\" \"npm run dev:server\" \"npm run dev:client\"",
@@ -8,7 +8,8 @@
     "dev:client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "start": "node server/index.js",
-    "seed": "node server/seed.js"
+    "seed": "node server/seed.js",
+    "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
     "better-sqlite3": "^11.1.2",
