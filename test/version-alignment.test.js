@@ -10,7 +10,7 @@ test('package versions and changelog release entry stay aligned', () => {
   const changelog = fs.readFileSync('CHANGELOG.md', 'utf8')
   assert.match(changelog, new RegExp(`^## \\[${rootPackage.version.replace(/\./g, '\\.')}\\]`, 'm'))
 
-  if (process.env.GITHUB_REF_NAME) {
+  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
     assert.equal(process.env.GITHUB_REF_NAME.replace(/^v/, ''), rootPackage.version)
   }
 })
