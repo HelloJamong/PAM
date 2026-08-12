@@ -71,7 +71,7 @@ jobs:
         working-directory: launcher
         run: |
           go mod download
-          go test ./health
+          go test ./...
           go build -ldflags="-H windowsgui" -o ../PAM.exe .
 
       - name: Download portable Node.js runtime

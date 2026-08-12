@@ -77,6 +77,7 @@ func startNode() {
 
 	cmd := exec.Command(nodePath, entryPath)
 	cmd.Dir = exeDir
+	configureBackgroundProcess(cmd)
 	if err := cmd.Start(); err != nil {
 		setError()
 		return
