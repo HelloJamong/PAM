@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
+import { today } from '../utils/date.js'
 
-const today = () => new Date().toISOString().slice(0, 10)
 const EMPTY_FORM = { asset_id: '', user_name: '', company_name: '', phone: '', checkout_date: today(), expected_return_date: '', checkout_confirmed_by: '', note: '' }
 
 export default function Checkout() {

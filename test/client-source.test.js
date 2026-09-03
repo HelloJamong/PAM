@@ -16,8 +16,9 @@ test('list pages expose request failures and debounce search requests', () => {
     assert.doesNotMatch(page, /catch\(\(\) => \{\}\)/)
     assert.match(page, /role="alert"/)
   }
-  assert.match(assets, /useDebouncedValue/)
-  assert.match(history, /useDebouncedValue/)
+  assert.match(assets, /usePaginatedList/)
+  assert.match(history, /usePaginatedList/)
+  assert.match(source('client/src/hooks/usePaginatedList.js'), /useDebouncedValue/)
 })
 
 test('responsive and dialog accessibility contracts are present', () => {

@@ -3,7 +3,7 @@ const router = express.Router()
 const db = require('../db')
 const { requireAuth, requirePasswordReady } = require('../auth')
 const { validateLoanDates } = require('../validation')
-const { backupAfterMutation } = require('../utils/backup')
+const { scheduleBackup, getBackupStatus } = require('../utils/backup')
 const { parsePagination, paginationMeta } = require('../pagination')
 
 router.use(requireAuth, requirePasswordReady)
@@ -86,8 +86,8 @@ router.post('/checkout', async (req, res, next) => {
     })
 
     const record = checkout()
-    const backup = await backupAfterMutation(db, '반출 등록')
-    res.status(201).json({ success: true, data: record, backup })
+    scheduleBackup(db, '반출 등록')
+    res.status(201).json({ success: true, data: record, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }
@@ -123,8 +123,8 @@ router.put('/:id/return', async (req, res, next) => {
     })
 
     const updated = returnOp()
-    const backup = await backupAfterMutation(db, '반납 처리')
-    res.json({ success: true, data: updated, backup })
+    scheduleBackup(db, '반납 처리')
+    res.json({ success: true, data: updated, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }

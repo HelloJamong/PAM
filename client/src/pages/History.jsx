@@ -1,37 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api.js'
 import Pagination from '../components/Pagination.jsx'
-import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
+import { usePaginatedList } from '../hooks/usePaginatedList.js'
+import { todayCompact } from '../utils/date.js'
 
 export default function History() {
-  const [loans, setLoans] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [error, setError] = useState('')
-  const [page, setPage] = useState(1)
-  const [pagination, setPagination] = useState(null)
-  const debouncedSearch = useDebouncedValue(search)
-
-  const load = () => {
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (statusFilter) params.set('status', statusFilter)
-    params.set('page', page)
-    params.set('limit', '25')
-    api.get(`/loans?${params}`)
-      .then(res => {
-        if (res.pagination.page > res.pagination.totalPages) {
-          setPage(res.pagination.totalPages)
-          return
-        }
-        setLoans(res.data)
-        setPagination(res.pagination)
-        setError('')
-      })
-      .catch(err => setError(err.message))
-  }
-
-  useEffect(() => { load() }, [debouncedSearch, statusFilter, page])
+  const {
+    items: loans, pagination, error, setError, setPage,
+  } = usePaginatedList('/loans', { search, status: statusFilter })
 
   const handleDownload = async () => {
     const params = new URLSearchParams()
@@ -39,14 +17,7 @@ export default function History() {
     if (statusFilter) params.set('status', statusFilter)
     try {
       setError('')
-      const res = await api.get(`/export/loans.csv?${params}`)
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `loans_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
+      await api.download(`/export/loans.csv?${params}`, `loans_${todayCompact()}.csv`)
     } catch (err) {
       setError(err.message)
     }

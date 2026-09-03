@@ -8,7 +8,7 @@ const {
   requireAuth,
   validatePasswordPolicy,
 } = require('../auth')
-const { backupAfterMutation } = require('../utils/backup')
+const { scheduleBackup, getBackupStatus } = require('../utils/backup')
 
 const loginLimiter = createLoginLimiter()
 
@@ -52,16 +52,17 @@ router.post('/login', async (req, res, next) => {
     }
 
     loginLimiter.reset(clientKey)
-    let backup
+    let migrated = false
     if (!setting.value.startsWith('scrypt$')) {
       setSetting('admin_password', hashPassword(password))
-      backup = await backupAfterMutation(db, '비밀번호 해시 마이그레이션')
+      scheduleBackup(db, '비밀번호 해시 마이그레이션')
+      migrated = true
     }
 
     const passwordChangeRequired = isPasswordChangeRequired()
     req.session.authenticated = true
     req.session.passwordChangeRequired = passwordChangeRequired
-    res.json({ success: true, passwordChangeRequired, ...(backup && { backup }) })
+    res.json({ success: true, passwordChangeRequired, ...(migrated && { backup: getBackupStatus() }) })
   } catch (err) {
     next(err)
   }
@@ -94,9 +95,9 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
     setSetting('admin_password', hashPassword(newPassword))
     setSetting('admin_password_must_change', 'false')
     req.session.passwordChangeRequired = false
-    const backup = await backupAfterMutation(db, '비밀번호 변경')
+    scheduleBackup(db, '비밀번호 변경')
 
-    res.json({ success: true, passwordChangeRequired: false, backup })
+    res.json({ success: true, passwordChangeRequired: false, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
-
-const today = () => new Date().toISOString().slice(0, 10)
+import { today } from '../utils/date.js'
 
 export default function Return() {
   const [loans, setLoans] = useState([])

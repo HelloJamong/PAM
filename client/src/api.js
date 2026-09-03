@@ -37,9 +37,21 @@ async function request(method, path, body) {
   return data
 }
 
+async function download(path, filename) {
+  const res = await request('GET', path)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   get:    (path)        => request('GET',    path),
   post:   (path, body)  => request('POST',   path, body),
   put:    (path, body)  => request('PUT',    path, body),
   delete: (path)        => request('DELETE', path),
+  download,
 }

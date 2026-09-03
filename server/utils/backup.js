@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 
 const DEFAULT_RETENTION = 30
+const BACKUP_FAILURE_MESSAGE = '데이터는 저장되었지만 자동 백업에 실패했습니다. 저장 공간과 backup 폴더를 확인해주세요.'
 let backupQueue = Promise.resolve()
 let lastBackupStatus = { success: null, lastAttemptAt: null }
 
@@ -71,7 +72,11 @@ function runBackup(db, options = {}) {
       return filePath
     })
     .catch(err => {
-      lastBackupStatus = { success: false, lastAttemptAt: new Date().toISOString() }
+      lastBackupStatus = {
+        success: false,
+        lastAttemptAt: new Date().toISOString(),
+        message: BACKUP_FAILURE_MESSAGE,
+      }
       throw err
     })
   backupQueue = operation.catch(() => {})
@@ -84,15 +89,24 @@ async function backupAfterMutation(db, context, options = {}) {
     return { success: true }
   } catch (err) {
     console.error(`[백업 오류${context ? `: ${context}` : ''}]`, err.message)
-    return {
-      success: false,
-      message: '데이터는 저장되었지만 자동 백업에 실패했습니다. 저장 공간과 backup 폴더를 확인해주세요.',
-    }
+    return { success: false, message: BACKUP_FAILURE_MESSAGE }
   }
+}
+
+// 응답을 막지 않는 백업 트리거. 결과는 getBackupStatus() / GET /api/health 로 노출된다.
+function scheduleBackup(db, context, options = {}) {
+  runBackup(db, options).catch(err => {
+    console.error(`[백업 오류${context ? `: ${context}` : ''}]`, err.message)
+  })
 }
 
 function getBackupStatus() {
   return { ...lastBackupStatus }
 }
 
-module.exports = { runBackup, backupAfterMutation, getBackupStatus }
+// 큐에 쌓인 백업이 모두 끝날 때까지 대기 (테스트에서 파일 검증 전 사용)
+function whenBackupSettled() {
+  return backupQueue
+}
+
+module.exports = { runBackup, backupAfterMutation, scheduleBackup, getBackupStatus, whenBackupSettled }

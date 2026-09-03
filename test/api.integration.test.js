@@ -5,6 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const Database = require('better-sqlite3')
 const { legacyHashPassword } = require('../server/auth')
+const { whenBackupSettled } = require('../server/utils/backup')
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pam-api-'))
 process.env.NODE_ENV = 'test'
@@ -124,14 +125,22 @@ test('API protects asset/loan consistency and writes recoverable snapshots', asy
 
   response = await request('PUT', `/api/loans/${loan.id}/return`, { return_date: '2026-08-12' })
   assert.equal(response.status, 200)
-  assert.equal((await response.json()).backup.success, true)
+  assert.equal((await response.json()).success, true)
   assert.equal(db.prepare('SELECT status FROM assets WHERE id = ?').get(asset.id).status, '보관중')
   assert.equal(db.prepare('SELECT status FROM loan_records WHERE id = ?').get(loan.id).status, '반납완료')
+
+  // 백업은 응답을 막지 않으므로, 스냅샷 검증 전 큐가 비워지길 기다린다.
+  await whenBackupSettled()
 
   response = await request('GET', '/api/health')
   const health = await response.json()
   assert.equal(health.app, 'PAM')
   assert.equal(health.backup.success, true)
+
+  response = await request('GET', '/api/does-not-exist')
+  assert.equal(response.status, 404)
+  assert.match(response.headers.get('content-type'), /application\/json/)
+  assert.equal((await response.json()).success, false)
 
   response = await request('GET', '/api/loans?page=1&limit=1')
   page = await response.json()

@@ -1,6 +1,6 @@
 {
   "name": "pam-client",
-  "version": "26.1.4",
+  "version": "26.1.5",
   "private": true,
   "scripts": {
     "dev": "vite",

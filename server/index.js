@@ -55,6 +55,11 @@ app.get('/api/health', (req, res) => {
   })
 })
 
+// 알 수 없는 API 경로는 JSON 404로 응답 (아래 SPA 폴백이 index.html을 200으로 반환하는 것 방지)
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, message: 'API 경로를 찾을 수 없습니다.' })
+})
+
 // 운영 빌드: 정적 파일 서빙 (API 이외 모든 경로 → index.html)
 if (!isDev) {
   const publicDir = path.join(__dirname, 'public')

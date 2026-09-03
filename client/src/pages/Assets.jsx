@@ -1,58 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import { api } from '../api.js'
 import Pagination from '../components/Pagination.jsx'
-import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
+import { usePaginatedList } from '../hooks/usePaginatedList.js'
+import { todayCompact } from '../utils/date.js'
 
 const EMPTY_FORM = { asset_no: '', model_name: '', serial_no: '', status: '보관중', note: '' }
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10).replace(/-/g, '')
-}
-
-async function downloadCsv(response, filename) {
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 export default function Assets() {
-  const [assets, setAssets] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const {
+    items: assets, pagination, error, setError, setPage, reload,
+  } = usePaginatedList('/assets', { search, status: statusFilter })
   const [form, setForm] = useState(EMPTY_FORM)
   const [editId, setEditId] = useState(null)
-  const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [importing, setImporting] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pagination, setPagination] = useState(null)
   const fileInputRef = useRef(null)
-  const debouncedSearch = useDebouncedValue(search)
-
-  const load = () => {
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (statusFilter) params.set('status', statusFilter)
-    params.set('page', page)
-    params.set('limit', '25')
-    api.get(`/assets?${params}`)
-      .then(res => {
-        if (res.pagination.page > res.pagination.totalPages) {
-          setPage(res.pagination.totalPages)
-          return
-        }
-        setAssets(res.data)
-        setPagination(res.pagination)
-        setError('')
-      })
-      .catch(err => setError(err.message))
-  }
-
-  useEffect(() => { load() }, [debouncedSearch, statusFilter, page])
 
   const handleChange = e => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
@@ -67,7 +31,7 @@ export default function Assets() {
         await api.post('/assets', form)
         setMessage('자산이 등록되었습니다.')
       }
-      setForm(EMPTY_FORM); setEditId(null); load()
+      setForm(EMPTY_FORM); setEditId(null); reload()
     } catch (err) {
       setError(err.message)
     }
@@ -85,7 +49,7 @@ export default function Assets() {
     try {
       await api.delete(`/assets/${asset.id}`)
       setMessage('자산이 삭제되었습니다.')
-      load()
+      reload()
     } catch (err) {
       setError(err.message)
     }
@@ -99,8 +63,7 @@ export default function Assets() {
     if (statusFilter) params.set('status', statusFilter)
     setError(''); setMessage('')
     try {
-      const res = await api.get(`/assets/export.csv?${params}`)
-      await downloadCsv(res, `assets_${todayKey()}.csv`)
+      await api.download(`/assets/export.csv?${params}`, `assets_${todayCompact()}.csv`)
     } catch (err) {
       setError(err.message)
     }
@@ -109,8 +72,7 @@ export default function Assets() {
   const handleTemplateDownload = async () => {
     setError(''); setMessage('')
     try {
-      const res = await api.get('/assets/template.csv')
-      await downloadCsv(res, 'assets_import_template.csv')
+      await api.download('/assets/template.csv', 'assets_import_template.csv')
     } catch (err) {
       setError(err.message)
     }
@@ -137,7 +99,7 @@ export default function Assets() {
       const res = await api.post('/assets/import', { csv })
       const { total, created, updated } = res.data
       setMessage(`CSV 가져오기 완료: 총 ${total}건, 신규 ${created}건, 업데이트 ${updated}건`)
-      load()
+      reload()
     } catch (err) {
       setError(err.message)
     } finally {

@@ -4,7 +4,7 @@ const db = require('../db')
 const { requireAuth, requirePasswordReady } = require('../auth')
 const { buildAssetsCsv, buildAssetsTemplateCsv, parseAssetsCsv } = require('../utils/csv')
 const { validateAssetStatusTransition } = require('../validation')
-const { backupAfterMutation } = require('../utils/backup')
+const { scheduleBackup, getBackupStatus } = require('../utils/backup')
 const { parsePagination, paginationMeta } = require('../pagination')
 
 router.use(requireAuth, requirePasswordReady)
@@ -128,8 +128,8 @@ router.post('/import', async (req, res, next) => {
       return { total: items.length, created, updated }
     })(assets)
 
-    const backup = await backupAfterMutation(db, '자산 CSV 가져오기')
-    res.json({ success: true, data: result, backup })
+    scheduleBackup(db, '자산 CSV 가져오기')
+    res.json({ success: true, data: result, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }
@@ -151,8 +151,8 @@ router.post('/', async (req, res, next) => {
         'INSERT INTO assets (asset_no, model_name, serial_no, status, note) VALUES (?, ?, ?, ?, ?)'
       ).run(asset_no, model_name, serial_no || null, status, note || null)
       const created = db.prepare('SELECT * FROM assets WHERE id = ?').get(result.lastInsertRowid)
-      const backup = await backupAfterMutation(db, '자산 등록')
-      res.status(201).json({ success: true, data: created, backup })
+      scheduleBackup(db, '자산 등록')
+      res.status(201).json({ success: true, data: created, backup: getBackupStatus() })
     } catch (err) {
       if (err.message.includes('UNIQUE')) {
         return res.status(409).json({ success: false, message: '이미 존재하는 자산번호입니다.' })
@@ -192,8 +192,8 @@ router.put('/:id', async (req, res, next) => {
     }
 
     const updated = db.prepare('SELECT * FROM assets WHERE id = ?').get(id)
-    const backup = await backupAfterMutation(db, '자산 수정')
-    res.json({ success: true, data: updated, backup })
+    scheduleBackup(db, '자산 수정')
+    res.json({ success: true, data: updated, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }
@@ -212,8 +212,8 @@ router.delete('/:id', async (req, res, next) => {
       db.prepare('DELETE FROM loan_records WHERE asset_id = ?').run(id)
       db.prepare('DELETE FROM assets WHERE id = ?').run(id)
     })()
-    const backup = await backupAfterMutation(db, '자산 삭제')
-    res.json({ success: true, backup })
+    scheduleBackup(db, '자산 삭제')
+    res.json({ success: true, backup: getBackupStatus() })
   } catch (err) {
     next(err)
   }
